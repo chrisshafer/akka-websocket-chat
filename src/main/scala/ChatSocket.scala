@@ -22,7 +22,6 @@ import scala.util.Random
 
 
 object Upgradeable {
-
   def unapply(req: HttpRequest) : Option[HttpRequest] = {
     if (req.header[UpgradeToWebsocket].isDefined) {
       req.header[UpgradeToWebsocket] match {
@@ -31,24 +30,19 @@ object Upgradeable {
       }
     } else None
   }
-
 }
 
 case class ChatEvent(msg: String, code: Int = 1)
 case object ChatEvent extends DefaultJsonProtocol {
   implicit val protocol = jsonFormat2(ChatEvent.apply)
 }
-object WSServer extends App {
+object ChatServer extends App {
 
   implicit val system = ActorSystem("chatHandler")
   implicit val fm = ActorMaterializer()
   import system.dispatcher
 
   val router = system.actorOf(Props[RouterActor], "router")
-
-  system.scheduler.schedule(50 milliseconds, 10 second){
-    router ! SendStats
-  }
 
   val binding = Http().bindAndHandleSync({
 
@@ -62,7 +56,6 @@ object WSServer extends App {
       import FlowGraph.Implicits._
 
       val source = Source.actorPublisher[String](Props(classOf[RouterPublisher],router))
-
       val merge = b.add(Merge[String](2))
 
       val validOrInvalid = b.add(Flow[String].map{
@@ -72,12 +65,10 @@ object WSServer extends App {
         case _ =>
           ChatEvent("Invalid Message",500).toJson.toString()
       })
-
       val mapMsgToString = b.add(Flow[Message].map[String] {
         case TextMessage.Strict(txt) => txt
         case _ => ""
       })
-
       val mapStringToMsg = b.add(Flow[String].map[Message]( x => TextMessage.Strict(x)))
 
       val broadcasted = b.add(source)
@@ -93,6 +84,10 @@ object WSServer extends App {
     req.header[UpgradeToWebsocket].get.handleMessages(flow)
   }
 
+  system.scheduler.schedule(50 milliseconds, 10 second){
+    router ! SendStats
+  }
+  
   try {
     Await.result(binding, 1 second)
     println("Server online at http://localhost:9001")

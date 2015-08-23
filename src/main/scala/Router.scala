@@ -33,24 +33,16 @@ class RouterPublisher(router: ActorRef) extends ActorPublisher[String] {
   import akka.stream.actor.ActorPublisherMessage._
   import scala.collection.mutable
 
-  val MaxBufferSize = 100
-
   private val queue = mutable.Queue[String]()
-
+  val MaxBufferSize = 100
   var queueUpdated = false
 
-  override def preStart() {
-    router ! AddRoutee(ActorRefRoutee(self))
-  }
-
-  override def postStop(): Unit = {
-    router ! RemoveRoutee(ActorRefRoutee(self))
-  }
+  override def preStart(): Unit = router ! AddRoutee(ActorRefRoutee(self))
+  override def postStop(): Unit = router ! RemoveRoutee(ActorRefRoutee(self))
 
   def receive = {
 
     case message: String  =>
-
       if (queue.size == MaxBufferSize) {
         queue.dequeue()
         println("Oh noes ! Buffer full !")
@@ -60,13 +52,13 @@ class RouterPublisher(router: ActorRef) extends ActorPublisher[String] {
         queueUpdated = true
         self ! QueueUpdated
       }
-
     case QueueUpdated => deliver()
 
     case Cancel => context.stop(self)
   }
 
-  @tailrec final def deliver(): Unit = {
+  @tailrec
+  final def deliver(): Unit = {
 
     if (queue.size == 0 && totalDemand != 0) {
       queueUpdated = false
