@@ -22,7 +22,7 @@ class RouterActor extends Actor {
     case msg: ChatEvent =>
       clients.foreach(_.send(msg.toJson.toString() ,sender))
     case SendStats =>
-      clients.foreach(_.send(ChatEvent(clients.size.toString,2).toJson.toString(),sender))
+      clients.foreach(_.send(ChatEvent(clients.size.toString,"SERVER",2).toJson.toString(),sender))
     case msg => clients.foreach(_.send(msg, sender))
   }
 }

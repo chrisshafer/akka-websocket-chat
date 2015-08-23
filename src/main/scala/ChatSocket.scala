@@ -32,9 +32,9 @@ object Upgradeable {
   }
 }
 
-case class ChatEvent(msg: String, code: Int = 1)
+case class ChatEvent(msg: String, sender: String, code: Int = 1)
 case object ChatEvent extends DefaultJsonProtocol {
-  implicit val protocol = jsonFormat2(ChatEvent.apply)
+  implicit val protocol = jsonFormat3(ChatEvent.apply)
 }
 object ChatServer extends App {
 
@@ -57,13 +57,19 @@ object ChatServer extends App {
 
       val source = Source.actorPublisher[String](Props(classOf[RouterPublisher],router))
       val merge = b.add(Merge[String](2))
+      var user = ""
 
       val validOrInvalid = b.add(Flow[String].map{
         case x =>
-          router ! ChatEvent(x)
-          ChatEvent("Message Sent",200).toJson.toString()
+          if(user == ""){
+            user = x
+            ChatEvent("Hello "+x,"SERVER",200).toJson.toString()
+          }else{
+            router ! ChatEvent(x,user)
+            ChatEvent("Message Sent","SERVER",200).toJson.toString()
+          }
         case _ =>
-          ChatEvent("Invalid Message",500).toJson.toString()
+          ChatEvent("Invalid Message","SERVER",500).toJson.toString()
       })
       val mapMsgToString = b.add(Flow[Message].map[String] {
         case TextMessage.Strict(txt) => txt
@@ -87,7 +93,7 @@ object ChatServer extends App {
   system.scheduler.schedule(50 milliseconds, 10 second){
     router ! SendStats
   }
-  
+
   try {
     Await.result(binding, 1 second)
     println("Server online at http://localhost:9001")
