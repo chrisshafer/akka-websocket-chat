@@ -32,7 +32,7 @@ object Upgradeable {
   }
 }
 
-case class ChatEvent(msg: String, sender: String, code: Int = 1)
+case class ChatEvent(message: String, user: String, code: Int = 1)
 case object ChatEvent extends DefaultJsonProtocol {
   implicit val protocol = jsonFormat3(ChatEvent.apply)
 }
@@ -59,30 +59,30 @@ object ChatServer extends App {
       val merge = b.add(Merge[String](2))
       var user = ""
 
-      val validOrInvalid = b.add(Flow[String].map{
-        case x =>
-          if(user == ""){
-            user = x
-            ChatEvent("Hello "+x,"SERVER",200).toJson.toString()
-          }else{
-            router ! ChatEvent(x,user)
-            ChatEvent("Message Sent","SERVER",200).toJson.toString()
-          }
+      val validOrInvalid = b.add(Flow[ChatEvent].map{
+        case broadcast: ChatEvent if user != "" =>
+          router ! ChatEvent(broadcast.message,user)
+          ChatEvent("Message Sent","SERVER",200).toJson.toString()
+        case register: ChatEvent if user == "" && register.code == 3 =>
+          user = register.message
+          ChatEvent("Hello "+user,"SERVER",200).toJson.toString()
         case _ =>
           ChatEvent("Invalid Message","SERVER",500).toJson.toString()
       })
-      val mapMsgToString = b.add(Flow[Message].map[String] {
-        case TextMessage.Strict(txt) => txt
-        case _ => ""
+      
+      val mapMsgToIncomingMessage = b.add(Flow[Message].map[ChatEvent] {
+        case TextMessage.Strict(txt) => JsonParser(txt).convertTo[ChatEvent]
+        case _ => ChatEvent("","",-1)
       })
+
       val mapStringToMsg = b.add(Flow[String].map[Message]( x => TextMessage.Strict(x)))
 
       val broadcasted = b.add(source)
 
-      mapMsgToString ~> validOrInvalid ~> merge
+      mapMsgToIncomingMessage ~> validOrInvalid ~> merge
                            broadcasted ~> merge ~> mapStringToMsg
 
-      (mapMsgToString.inlet, mapStringToMsg.outlet)
+      (mapMsgToIncomingMessage.inlet, mapStringToMsg.outlet)
     }
   }
 
